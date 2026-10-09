@@ -1,6 +1,6 @@
 {
   "name": "pi-background-tasks",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "Pi extension for durable background shell tasks, read-only delegated agents, local attested Pi runs, and fixed-purpose Fusion workflows through child Pi processes.",
   "type": "module",
   "license": "ISC",
@@ -43,7 +43,7 @@
   "scripts": {
     "build:runtime": "node scripts/build-runtime.mjs",
     "build:package": "node scripts/build-runtime.mjs --package",
-    "prepare": "npm run build:package",
+    "prepare": "node scripts/prepare-package.mjs",
     "test:git-install": "node --test tests/package/github-install.test.mjs",
     "deploy:extension": "npm run build:runtime && node scripts/deploy-extension.mjs",
     "test:extension-deployment": "npm run build:runtime && node --test tests/package/extension-deployment.test.mjs",

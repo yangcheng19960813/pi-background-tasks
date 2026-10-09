@@ -40,6 +40,7 @@ async function run(command, args, cwd, extraEnv = {}, timeout = 180000) {
 
 test('npm Git 安装：真实 prepare、纯运行打包、无自动宿主 SDK、完整原生角色 SDK 验证', async t => {
   const root = await mkdtemp(join(tmpdir(),'pi-npm-git-'));
+  const version=JSON.parse(await readFile(join(source,'package.json'),'utf8')).version;
   t.after(() => rm(root,{recursive:true,force:true}));
   const repository=join(root,'repository'),consumer=join(root,'consumer');
   await mkdir(repository);await mkdir(consumer);
@@ -53,8 +54,12 @@ test('npm Git 安装：真实 prepare、纯运行打包、无自动宿主 SDK、
   await run('git',['init','--quiet'],repository);
   await run('git',['add','--','.'],repository);
   await run('git',['-c','core.hooksPath='+join(root,'no-hooks'),'-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','isolated npm Git fixture'],repository);
+  await run('git',['tag','v'+version],repository);
   await writeFile(join(consumer,'package.json'),JSON.stringify({name:'personal-git-consumer',private:true}));
   const output=await run(process.execPath,[npmCli,'install','git+'+pathToFileURL(repository).href,'--omit=dev','--no-audit','--no-fund','--foreground-scripts'],consumer);
+  // Pi installs git packages with npm install --omit=dev: no devDependencies, no build.
+  // The committed runtime/ payload plus prepare fallback must satisfy that flow too.
+  await run(process.execPath,[npmCli,'install','git+'+pathToFileURL(repository).href+'#v'+version,'--omit=dev','--no-audit','--no-fund','--foreground-scripts'],consumer);
   t.diagnostic(output.slice(-3000));
   const installed=join(consumer,'node_modules','pi-background-tasks');
   const manifest=JSON.parse(await readFile(join(installed,'package.json'),'utf8'));
