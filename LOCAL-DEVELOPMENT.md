@@ -109,7 +109,15 @@ npm pack
 - 从实际安装后的包通过 Pi manifest 加载，完整 11 项原生 SDK 回归通过，包含真实子 Pi、角色配置、取消/超时、压缩、重载及会话隔离。
 - 该测试验证本地 Git transport 和 npm 的构建/打包机制，未伪称 GitHub 远程认证、分支推送或在线安装已验收。
 
-## extensions 部署（当前启用方式）
+## 当前激活方式：git 包（v2.7.1）
+
+`agent/settings.json` 的 packages 现为 `git:github.com/yangcheng19960813/pi-background-tasks@v2.7.1`，来自 GitHub Release v2.7.1。扩展目录部署已移出自动加载（备份：外层 `.pi/tasks/extension-deployment/extensions-snapshot-2.7.0/`），两者不同时加载。
+
+发布流程：提交后 `git tag v<version>` 并推送，Actions 自动构建并创建 Release、附带 npm tgz（无 map、71 文件）。Pi 的 git 包安装使用 `npm install --omit=dev`，无 devDependencies，因此 `runtime/` 产物随仓库提交；`prepare` 幂等——包内有 TypeScript 就重建，否则校验入库产物。日常升级：改版本 → `npm run build:package` → 提交（含 runtime/）→ 打 tag 推送 → `pi install git:github.com/yangcheng19960813/pi-background-tasks@v<version>`。
+
+上游 `Release certification` 已改为仅手动触发：其 docs/pnpm 认证针对上游 npm 公发口径，个人 runtime/ 打包必失败；个人链路由 `release.yml` 的 prepack 检查覆盖。v2.7.0 是首个失败的发布尝试（npm 10 pack 兼容问题），保留为记录，可删除。
+
+## extensions 部署（历史，已被 git 包取代）
 
 - 开发仓库：`C:/Users/Administrator/.pi/project/pi-background-tasks/`，保留 Git 源码和测试。
 - 运行目录：`C:/Users/Administrator/.pi/agent/extensions/pi-background-tasks/`。
