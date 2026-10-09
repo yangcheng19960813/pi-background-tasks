@@ -1,3 +1,9 @@
+# 个人 GitHub 安装分支
+
+本 fork 的原生角色后台整合仅作个人使用。安装说明以 [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) 为准：npm 从 Git 获取源码后执行 prepare，生成无 `.map` 的 `runtime/`；安装包不包含源码、测试或宿主 SDK。`private: true` 禁止误发 npm registry，但不改变 GitHub 仓库的可见性。
+
+下面保留上游介绍；其中公共 npm 安装方式、生成文档和验证记录不代表本定制分支的发布状态。新增工具为 `bg_subagent` 和 `bg_subagent_result`；原始 subagent、角色、自动委派及计时器仍按本地说明管理。
+
 <div align="center">
   <img src="logo.png" alt="pi-background-tasks logo: a futuristic dispatcher coordinating parallel work nodes into a completed result" width="144" height="144">
 
@@ -29,7 +35,7 @@
 | Package | `pi-background-tasks` |
 | Version | `2.6.9` |
 | Node engine | `>=22.19.0` |
-| Pi entrypoints | `./dist/extensions/anthropic-attribution.js`, `./dist/extensions/background-tasks.js` |
+| Pi entrypoints | `./runtime/extensions/anthropic-attribution.js`, `./runtime/extensions/background-tasks.js` |
 | Package image | [logo.png](https://raw.githubusercontent.com/ismailsaleekh/pi-background-tasks/main/logo.png) |
 <!-- pi-docs:end name="readme-package-facts" -->
 

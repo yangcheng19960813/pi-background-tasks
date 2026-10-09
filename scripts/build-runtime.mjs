@@ -7,12 +7,17 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const dist = join(root, 'dist');
+const packageBuild = process.argv.slice(2).includes('--package');
+if (process.argv.slice(2).some(argument => argument !== '--package')) throw new Error('Unknown runtime build argument');
+const outputName = packageBuild ? 'runtime' : 'dist';
+const dist = join(root, outputName);
 const require = createRequire(import.meta.url);
 const tsc = require.resolve('typescript/bin/tsc');
 
 rmSync(dist, { recursive: true, force: true });
-const result = spawnSync(process.execPath, [tsc, '--project', join(root, 'tsconfig.build.json')], {
+const compilerArgs = [tsc, '--project', join(root, 'tsconfig.build.json')];
+if (packageBuild) compilerArgs.push('--outDir', dist, '--sourceMap', 'false', '--inlineSources', 'false');
+const result = spawnSync(process.execPath, compilerArgs, {
   cwd: root,
   encoding: 'utf8',
   env: process.env,
@@ -20,6 +25,12 @@ const result = spawnSync(process.execPath, [tsc, '--project', join(root, 'tsconf
 if (result.status !== 0) {
   process.stderr.write(result.stderr || result.stdout || 'runtime TypeScript build failed\n');
   process.exit(result.status ?? 1);
+}
+
+// Execution-only vendor JavaScript is intentionally not part of the TypeScript emission.
+await mkdir(join(dist, 'src/core/subagent/vendor'), { recursive: true });
+for (const name of ['executor.js', 'agents.js', 'transcript-store.js']) {
+  await copyFile(join(root, 'src/core/subagent/vendor', name), join(dist, 'src/core/subagent/vendor', name));
 }
 
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -47,5 +58,5 @@ for (const relativePath of [
 }
 
 console.log(
-  'runtime-build: compiled JavaScript entrypoints and deferred runtime closure into dist/.',
+  `runtime-build: compiled JavaScript entrypoints and deferred runtime closure into ${outputName}/ (${packageBuild ? 'without source maps' : 'with source maps'}).`,
 );

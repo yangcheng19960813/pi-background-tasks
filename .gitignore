@@ -1,4 +1,5 @@
 node_modules/
+/runtime/
 .pi/
 *.tgz
 .DS_Store

@@ -5,9 +5,7 @@
   "type": "module",
   "license": "ISC",
   "author": "Ismail <ismailsalikhodjaev@gmail.com>",
-  "publishConfig": {
-    "access": "public"
-  },
+  "private": true,
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -26,34 +24,34 @@
     "task-manager",
     "pi-dev"
   ],
-  "homepage": "https://github.com/ismailsaleekh/pi-background-tasks#readme",
+  "homepage": "https://github.com/yangcheng19960813/pi-background-tasks#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ismailsaleekh/pi-background-tasks.git"
+    "url": "git+https://github.com/yangcheng19960813/pi-background-tasks.git"
   },
   "bugs": {
-    "url": "https://github.com/ismailsaleekh/pi-background-tasks/issues"
+    "url": "https://github.com/yangcheng19960813/pi-background-tasks/issues"
   },
   "files": [
-    "dist/",
-    "extensions/",
-    "src/",
+    "runtime/",
     "README.md",
-    "TESTING.md",
-    "TEST_PLAN.md",
-    "PUBLISHING.md",
+    "LOCAL-DEVELOPMENT.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "docs/",
-    "BACKGROUND-TASKS-INSTRUCTIONS.md",
-    "logo.png"
+    "BACKGROUND-TASKS-INSTRUCTIONS.md"
   ],
   "scripts": {
     "build:runtime": "node scripts/build-runtime.mjs",
+    "build:package": "node scripts/build-runtime.mjs --package",
+    "prepare": "npm run build:package",
+    "test:git-install": "node --test tests/package/github-install.test.mjs",
+    "deploy:extension": "npm run build:runtime && node scripts/deploy-extension.mjs",
+    "test:extension-deployment": "npm run build:runtime && node --test tests/package/extension-deployment.test.mjs",
     "typecheck": "tsc --noEmit",
     "test:type-safety": "tsx --test tests/package/type-safety.test.ts",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "test:sdk": "npm run build:runtime && tsx --test --test-concurrency=1 tests/sdk/**/*.test.ts",
+    "test:native-subagent": "npm run build:runtime && npm run build:package && node --test tests/sdk/subagent-native-sdk.test.mjs",
     "test:rpc": "tsx --test tests/rpc/**/*.test.ts",
     "test:component": "tsx --test tests/component/**/*.test.ts",
     "test:package": "npm run build:runtime && tsx --test tests/package/**/*.test.ts",
@@ -78,25 +76,31 @@
     "test:docs": "tsx --test tests/unit/docs-gate.test.ts tests/package/docs-contract.test.ts",
     "payload:check": "npm run build:runtime && node scripts/check-package-payload.mjs",
     "release:check-version": "node scripts/check-release-version.mjs",
-    "prepack": "npm run build:runtime && npm run docs:verify && node scripts/check-package-payload.mjs"
+    "prepack": "npm run build:package && node scripts/check-personal-package.mjs"
   },
   "pi": {
     "image": "https://raw.githubusercontent.com/ismailsaleekh/pi-background-tasks/main/logo.png",
     "extensions": [
-      "./dist/extensions/anthropic-attribution.js",
-      "./dist/extensions/background-tasks.js"
+      "./runtime/extensions/anthropic-attribution.js",
+      "./runtime/extensions/background-tasks.js"
     ]
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "^0.81.1 || ^0.82.1 || ^0.83.0 || ^0.84.0",
-    "@earendil-works/pi-tui": "^0.81.1 || ^0.82.1 || ^0.83.0 || ^0.84.0",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "typebox": "*"
   },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": { "optional": true },
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "@earendil-works/pi-tui": { "optional": true },
+    "typebox": { "optional": true }
+  },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.84.0",
-    "@earendil-works/pi-coding-agent": "^0.84.0",
-    "@earendil-works/pi-tui": "^0.84.0",
+    "@earendil-works/pi-ai": "1.0.4",
+    "@earendil-works/pi-coding-agent": "1.0.4",
+    "@earendil-works/pi-tui": "1.0.4",
     "@types/node": "^24.0.0",
     "@types/turndown": "5.0.6",
     "tsx": "^4.19.0",
