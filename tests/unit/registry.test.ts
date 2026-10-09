@@ -894,6 +894,12 @@ void describe('BackgroundTaskRegistry', () => {
       killGraceMs: 10,
       stopWaitMs: 200,
       killProcess,
+      // The child is simulated: inject Windows tree termination too, rather than taskkill a fake PID.
+      killTree: async (_pid, phase) => {
+        groupPresent = false;
+        queueMicrotask(() => child?.close(null, phase === 'force' ? 'SIGKILL' : 'SIGTERM'));
+        return taskkillOutcome(0);
+      },
     });
     const identity = makeReloadShellIdentity(h.ctx.sessionId ?? '', realpathSync(h.cwd));
     const initialClaim = hub.beginActivation(identity, 'startup', 'c'.repeat(32));

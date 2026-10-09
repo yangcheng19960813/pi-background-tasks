@@ -29,3 +29,12 @@ Licensed under the MIT License:
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+
+## 本地 subagent 执行核心来源
+
+本地定制加入 `src/core/subagent/vendor/` 的代码，来自用户授权整合的本地 `agent/extensions/subagent/` 中 `index.ts`、`agents.ts` 和 `transcript-store.ts`。
+
+对应原文保存在 `maintenance/subagent-source/`，AST 提取脚本为 `maintenance/import-local-subagent.mjs`；执行专用版本另含此 fork 的宿主兼容与生命周期补丁。原本地文件不修改，原包的 ISC 版权及上述第三方 MIT 声明继续保留。
+
+本次导入来源尚未核实独立的再分发授权，不能因为包的 ISC 声明就推定导入代码也按 ISC 授权。当前限定为授权的本地开发与验证，发布前须补齐来源版权和许可信息。

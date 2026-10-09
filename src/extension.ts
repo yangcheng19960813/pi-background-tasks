@@ -403,6 +403,20 @@ export default async function backgroundTasksExtension(pi: ExtensionAPI): Promis
     }
   });
 
+
+  // Native role workflows share this registry; no command/EventBus/SDK bridge.
+  const { registerSubagentExtension } = await import('./subagent-extension.js');
+  registerSubagentExtension(pi, {
+    startManagedTask: async (ctx, options) => {
+      currentCtx = ctx;
+      const nextRegistryCtx = registryContext(ctx);
+      currentRegistryCtx = nextRegistryCtx;
+      return registry.startManagedTask(nextRegistryCtx, options);
+    },
+    snapshot: (task) => registry.snapshot(task),
+    resolveTask: (id) => registry.resolveTask(id),
+    updateManagedTask: (task, state, line) => registry.updateManagedTask(task, state, line),
+  });
   if (config.features.fusion) {
     const { registerFusionExtension } = await import('./fusion-extension.js');
     registerFusionExtension(pi, {
@@ -731,6 +745,7 @@ export default async function backgroundTasksExtension(pi: ExtensionAPI): Promis
       }
     } finally {
       eventService.close();
+      await registry.waitForTaskFinalizations();
       if ((event.reason !== 'reload' || reloadHandoffFailed) && activationLease !== undefined) {
         try {
           await registry.waitForReloadHostSettlement();

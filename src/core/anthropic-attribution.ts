@@ -4,7 +4,6 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type {
   AssistantMessageEventStream as HostAssistantMessageEventStream,
-  Context as HostContext,
   Model as HostModel,
   SimpleStreamOptions as HostSimpleStreamOptions,
 } from '@earendil-works/pi-ai';
@@ -3024,7 +3023,7 @@ async function fetchAnthropicResponse(
 }
 
 type HostForwardingModel = PiModelLike & HostModel<'anthropic-messages'>;
-type HostForwardingContext = PiStreamContext & HostContext;
+type HostForwardingContext = PiStreamContext & Parameters<ReturnType<HostAnthropicMessagesApiFactory>['streamSimple']>[1];
 type HostForwardingOptions = PiSimpleStreamOptions & HostSimpleStreamOptions;
 type HostForwardingStream = AssistantMessageEventStreamLike & HostAssistantMessageEventStream;
 

@@ -523,6 +523,7 @@ export class BackgroundTaskRegistry {
     runtimeDir;
     shuttingDown = false;
     taskAdmissionsClosed = false;
+    taskFinalizations = new Set();
     activeTaskAdmissions = new Set();
     taskAdmissionDrainWaiters = new Set();
     terminalPublicationClosed = false;
@@ -1477,6 +1478,8 @@ export class BackgroundTaskRegistry {
             notifyOnCompletion: request.notifyOnCompletion,
             triggerOnCompletion: request.triggerOnCompletion,
             fusion: request.fusion,
+            subagent: request.subagent,
+            timeoutSeconds: request.timeoutSeconds,
             managedCancel: request.cancel,
             managedStopWaitMs: request.stopWaitMs,
             terminalPublished: false,
@@ -1513,7 +1516,7 @@ export class BackgroundTaskRegistry {
                 const timedOut = task.killKind === 'timeout';
                 return this.finalizeTask(task, killed ? 'killed' : timedOut ? 'failed' : 'completed', killed || timedOut ? null : 0, undefined, timedOut ? task.error : undefined);
             }, (error) => {
-                const message = BackgroundTaskRegistry.errorMessage(error);
+                const message = BackgroundTaskRegistry.appendTaskError(task.error, BackgroundTaskRegistry.errorMessage(error));
                 const killed = task.killKind === 'user' || task.killKind === 'shutdown';
                 return this.finalizeTask(task, killed ? 'killed' : 'failed', null, undefined, message);
             })
@@ -1525,6 +1528,23 @@ export class BackgroundTaskRegistry {
             await this.awaitTaskAdmissionBoundary(this.writeMetadata(task, admission.controller.signal), admission);
             attachCompletion();
             this.assertTaskAdmissionOpen('a managed background task', admission);
+            if (request.timeoutSeconds !== undefined) {
+                const seconds = request.timeoutSeconds;
+                if (!Number.isFinite(seconds) || seconds <= 0)
+                    throw new Error('Managed timeoutSeconds must be positive');
+                task.timeoutHandle = setTimeout(() => {
+                    if (task.status !== 'running')
+                        return;
+                    task.killKind = 'timeout';
+                    task.error = `Timed out after ${seconds} seconds`;
+                    try {
+                        request.cancel();
+                    }
+                    catch (error) {
+                        this.logger.error('[background-tasks] managed timeout cancellation failed', error);
+                    }
+                }, Math.min(seconds * 1000, 2_147_483_647));
+            }
             this.onChange();
         }
         catch (error) {
@@ -1549,9 +1569,12 @@ export class BackgroundTaskRegistry {
         return task;
     }
     async updateManagedTask(task, state, line) {
-        if (task.status !== 'running' || task.fusion === undefined)
+        if (task.status !== 'running')
             return;
-        task.fusion.state = state;
+        if (task.fusion !== undefined)
+            task.fusion.state = state;
+        if (task.subagent !== undefined)
+            task.subagent.state = state;
         if (line !== undefined && line.length > 0)
             this.writeNotice(task, `${line}\n`);
         await this.writeMetadata(task);
@@ -3223,7 +3246,20 @@ export class BackgroundTaskRegistry {
             throw new Error(`Failed to send background task notification for ${task.id}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-    async finalizeTask(task, status, exitCode, signal, error) {
+    /** Drain lifecycle work, including notification metadata written after terminal publication. */
+    async waitForTaskFinalizations() {
+        while (this.taskFinalizations.size > 0) {
+            await Promise.allSettled([...this.taskFinalizations]);
+        }
+        await Promise.all([...this.tasks.values()].map((task) => task.metadataWriteChain));
+    }
+    finalizeTask(task, status, exitCode, signal, error) {
+        const completion = this.finalizeTaskInternal(task, status, exitCode, signal, error);
+        this.taskFinalizations.add(completion);
+        completion.then(() => { this.taskFinalizations.delete(completion); }, () => { this.taskFinalizations.delete(completion); });
+        return completion;
+    }
+    async finalizeTaskInternal(task, status, exitCode, signal, error) {
         if (task.finalized)
             return;
         task.finalized = true;

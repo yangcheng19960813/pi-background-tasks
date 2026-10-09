@@ -647,6 +647,7 @@ export function snapshot(task) {
         attestationPath: task.attestationPath,
         delegate: task.delegate,
         fusion: task.fusion,
+        subagent: task.subagent,
     };
 }
 export function formatSnapshotList(tasks, now = Date.now()) {

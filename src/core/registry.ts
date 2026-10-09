@@ -796,6 +796,7 @@ export class BackgroundTaskRegistry {
   private runtimeDir: RuntimeDir | undefined;
   private shuttingDown = false;
   private taskAdmissionsClosed = false;
+  private readonly taskFinalizations = new Set<Promise<void>>();
   private readonly activeTaskAdmissions = new Set<TaskAdmission>();
   private readonly taskAdmissionDrainWaiters = new Set<() => void>();
   private terminalPublicationClosed = false;
@@ -1928,6 +1929,8 @@ export class BackgroundTaskRegistry {
       notifyOnCompletion: request.notifyOnCompletion,
       triggerOnCompletion: request.triggerOnCompletion,
       fusion: request.fusion,
+      subagent: request.subagent,
+      timeoutSeconds: request.timeoutSeconds,
       managedCancel: request.cancel,
       managedStopWaitMs: request.stopWaitMs,
       terminalPublished: false,
@@ -1971,7 +1974,7 @@ export class BackgroundTaskRegistry {
             );
           },
           (error: unknown) => {
-            const message = BackgroundTaskRegistry.errorMessage(error);
+            const message = BackgroundTaskRegistry.appendTaskError(task.error, BackgroundTaskRegistry.errorMessage(error));
             const killed = task.killKind === 'user' || task.killKind === 'shutdown';
             return this.finalizeTask(task, killed ? 'killed' : 'failed', null, undefined, message);
           },
@@ -1991,6 +1994,16 @@ export class BackgroundTaskRegistry {
       );
       attachCompletion();
       this.assertTaskAdmissionOpen('a managed background task', admission);
+      if (request.timeoutSeconds !== undefined) {
+        const seconds = request.timeoutSeconds;
+        if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('Managed timeoutSeconds must be positive');
+        task.timeoutHandle = setTimeout(() => {
+          if (task.status !== 'running') return;
+          task.killKind = 'timeout';
+          task.error = `Timed out after ${seconds} seconds`;
+          try { request.cancel(); } catch (error) { this.logger.error('[background-tasks] managed timeout cancellation failed', error); }
+        }, Math.min(seconds * 1000, 2_147_483_647));
+      }
       this.onChange();
     } catch (error) {
       if (admission.controller.signal.aborted) {
@@ -2022,8 +2035,9 @@ export class BackgroundTaskRegistry {
   }
 
   async updateManagedTask(task: BgTask, state: string, line?: string): Promise<void> {
-    if (task.status !== 'running' || task.fusion === undefined) return;
-    task.fusion.state = state;
+    if (task.status !== 'running') return;
+    if (task.fusion !== undefined) task.fusion.state = state;
+    if (task.subagent !== undefined) task.subagent.state = state;
     if (line !== undefined && line.length > 0) this.writeNotice(task, `${line}\n`);
     await this.writeMetadata(task);
     this.onChange();
@@ -3962,7 +3976,31 @@ export class BackgroundTaskRegistry {
     }
   }
 
-  private async finalizeTask(
+  /** Drain lifecycle work, including notification metadata written after terminal publication. */
+  async waitForTaskFinalizations(): Promise<void> {
+    while (this.taskFinalizations.size > 0) {
+      await Promise.allSettled([...this.taskFinalizations]);
+    }
+    await Promise.all([...this.tasks.values()].map((task) => task.metadataWriteChain));
+  }
+
+  private finalizeTask(
+    task: BgTask,
+    status: TaskStatus,
+    exitCode: number | null,
+    signal?: string | null,
+    error?: string,
+  ): Promise<void> {
+    const completion = this.finalizeTaskInternal(task, status, exitCode, signal, error);
+    this.taskFinalizations.add(completion);
+    completion.then(
+      () => { this.taskFinalizations.delete(completion); },
+      () => { this.taskFinalizations.delete(completion); },
+    );
+    return completion;
+  }
+
+  private async finalizeTaskInternal(
     task: BgTask,
     status: TaskStatus,
     exitCode: number | null,

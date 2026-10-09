@@ -218,6 +218,13 @@ export interface ReloadShellOwnerHubV1 {
   isCurrentLease(lease: ReloadShellActivationLeaseV1): boolean;
 }
 
+export interface SubagentTaskFacts {
+  ownerSessionId: string;
+  roles: string[];
+  state: string;
+  resultPath?: string | undefined;
+}
+
 export interface BgTaskSnapshot {
   id: string;
   name?: string | undefined;
@@ -250,6 +257,7 @@ export interface BgTaskSnapshot {
   attestationPath?: string | undefined;
   delegate?: DelegateTaskFacts | undefined;
   fusion?: FusionTaskFacts | undefined;
+  subagent?: SubagentTaskFacts | undefined;
 }
 
 export interface AttestedPiTaskFiles {
@@ -466,7 +474,9 @@ export interface StartManagedTaskOptions {
   cancel: () => void;
   notifyOnCompletion: boolean;
   triggerOnCompletion: boolean;
-  fusion: FusionTaskFacts;
+  fusion?: FusionTaskFacts | undefined;
+  subagent?: SubagentTaskFacts | undefined;
+  timeoutSeconds?: number | undefined;
   stopWaitMs?: number | undefined;
   /** Prevent terminal publication until the launch receipt handoff is observable. */
   terminalPublicationGate?: Promise<void> | undefined;
@@ -1187,6 +1197,7 @@ export function snapshot(task: BgTask): BgTaskSnapshot {
     attestationPath: task.attestationPath,
     delegate: task.delegate,
     fusion: task.fusion,
+    subagent: task.subagent,
   };
 }
 
