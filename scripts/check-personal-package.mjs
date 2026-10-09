@@ -9,9 +9,12 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
 assert.ok(existsSync(npmCli), '需要可用的 npm CLI');
-const result = spawnSync(process.execPath, [npmCli, 'pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
+if (process.env.PI_PREPACK_NESTED === '1') process.exit(0); // npm 10 runs prepare under pack --ignore-scripts; stop re-entry instead of recursing.
+const result = spawnSync(process.execPath, [npmCli, 'pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', env: { ...process.env, PI_PREPACK_NESTED: '1' } });
 assert.equal(result.status, 0, result.stderr || result.stdout);
-const files = JSON.parse(result.stdout)[0].files.map(file => file.path);
+const jsonStart = result.stdout.indexOf('[\n');
+assert.ok(jsonStart >= 0, `npm pack 输出缺少 JSON 清单：${result.stdout.slice(0, 300)}`);
+const files = JSON.parse(result.stdout.slice(jsonStart))[0].files.map(file => file.path);
 const allowed = new Set(['package.json', 'README.md', 'LOCAL-DEVELOPMENT.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'BACKGROUND-TASKS-INSTRUCTIONS.md']);
 assert.equal(manifest.private, true, '个人包禁止 npm registry 发布');
 for (const file of files) {
