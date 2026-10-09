@@ -76,5 +76,5 @@ test('npm Git 安装：真实 prepare、纯运行打包、无自动宿主 SDK、
   assert.ok(lock.packages['node_modules/pi-background-tasks'].resolved.startsWith('git+file:'));
   assert.ok(lock.packages['node_modules/turndown']);assert.ok(lock.packages['node_modules/@mixmark-io/domino']);
   const sdkOutput=await run(process.execPath,['--test',join(source,'tests/sdk/subagent-native-sdk.test.mjs')],source,{PI_NATIVE_PACKAGE_DIR:resolve(installed)},90000);
-  t.diagnostic(sdkOutput);assert.match(sdkOutput,/pass 11/);assert.match(sdkOutput,/fail 0/);
+  t.diagnostic(sdkOutput);assert.match(sdkOutput,/\bpass 19\b/);assert.match(sdkOutput,/fail 0/);
 });

@@ -26,11 +26,10 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
-// Budgets apply per child process. Only scout has a tool-call limit.
+// Budgets apply per child process. Both quick and normal scout tasks share one tool-call limit.
 const SCOUT_QUICK_TIMEOUT_MS = 3 * 60 * 1000;
 const SCOUT_TIMEOUT_MS = 8 * 60 * 1000;
-const SCOUT_QUICK_MAX_TOOL_CALLS = 10;
-const SCOUT_MAX_TOOL_CALLS = 20;
+const SCOUT_MAX_TOOL_CALLS = 50;
 const AGENT_TIMEOUT_MS = {
     reviewer: 5 * 60 * 1000,
     planner: 5 * 60 * 1000,
@@ -48,7 +47,7 @@ function agentBudgetForTask(agentName, task) {
     return {
         timeoutMs: Number.isInteger(configuredTimeout) && configuredTimeout >= 50 && configuredTimeout <= 30 * 60 * 1000
             ? configuredTimeout : defaultTimeout,
-        ...(scout ? { maxToolCalls: quick ? SCOUT_QUICK_MAX_TOOL_CALLS : SCOUT_MAX_TOOL_CALLS } : {}),
+        ...(scout ? { maxToolCalls: SCOUT_MAX_TOOL_CALLS } : {}),
     };
 }
 // Keep the existing scout-only helper for compatibility with callers/tests.

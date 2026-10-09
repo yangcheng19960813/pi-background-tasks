@@ -166,3 +166,40 @@ PI_NATIVE_DEPLOYMENT_DIR=<临时目录>/agent/extensions/pi-background-tasks nod
 ### 历史开发包激活（已撤销）
 
 曾使用官方 install 把 `..\\project\\pi-background-tasks` 加入个人 packages，启用前备份为外层 `.pi/tasks/native-package-activation-1791466217218/agent-settings.before.json`。该声明现已删除，不是当前生产加载方式。
+
+## 原生子代理 MCP / 扩展工具补充验收
+
+此前 11 项 SDK 冒烟只核对角色工具声明，没有让子代理真正调用 MCP 或普通扩展工具。本次在 `tests/sdk/subagent-native-sdk.test.mjs` 增加四项实际调用回归：
+
+1. `direct` MCP + 普通扩展工具：子 Pi 实际执行扩展工具，连接本地 stdio MCP 服务并调用 `tools/call`。
+2. `deferred` MCP：实际调用 `tool_search`，确认下一轮才声明 MCP 工具，再执行 MCP 调用。
+3. 默认 `codemode` MCP：运行真实 QuickJS 脚本，嵌套 MCP 调用经过 tool_call/tool_result 管道，保留嵌套结果记录。
+4. 过滤负例：未列入角色 tools 的普通扩展、被显式 `mcp__` 白名单排除的 MCP，即使模型强行发出调用也不得执行。
+
+验收结果：`npm run test:native-subagent` 15/15；`npm run test:git-install` 1/1，安装后的包内原生 SDK 回归同样 15/15。新增服务端与扩展 fixture 位于 `tests/fixtures/subagent-tool-smoke-{mcp.mjs,extension.ts}`。证据包括真实子 PID、独立 MCP 服务 PID、initialize/tools/list/tools/call 请求、随机 token 回传、扩展权限事件和外部 transcript 的 toolCall/toolResult 对应关系。
+
+角色配置须遵循 Pi 1.0.4 的工具选择规则：普通扩展和 direct MCP 要显式列工具名；deferred 路径列 `tool_search`；默认 codemode 路径列 `codemode`。未出现 `mcp__` 的 --tools 列表不清除 MCP 注册；直接声明、间接调用和 MCP 白名单过滤不能混为一谈。子 Pi 自行加载其配置，不会自动继承父会话临时注册的工具。
+
+测试仅脚本化模型的工具选择，子 Pi、MCP 传输、工具执行和 transcript 均真实运行；这不等于外部模型自主工具选择测试，也不等于个人 CodeGraph 等实际服务已全部验收。全部测试使用临时 agentDir 和本地 MCP 服务，不读取或改写个人 auth/MCP 配置；该轮没有修改原生执行器源码。
+
+## 历史方案：scout 仅限时（已由下方统一 50 次上限方案取代）
+
+此前按用户确认，`src/core/subagent/vendor/executor.js` 曾移除 scout 的普通 20 次 / 快速 10 次配额、工具调用计数器和超额终止分支。保留快速任务 3 分钟、普通任务 8 分钟限时；`PI_SUBAGENT_SCOUT_TIMEOUT_MS` 覆盖范围、外层 registry 超时、主动取消、子孙进程清理及失败结果持久化不变。其他角色限时、bg_delegate/Fusion 的独立预算没有调整。
+
+新增四项回归：默认限时与环境覆盖边界；普通 scout 实际完成 25 次 MCP 调用；快速 scout 实际完成 12 次 MCP 调用；执行器内层限时触发时终止真实子孙进程并保留失败结果（外层设为更长的 20 秒以区分两层超时）。原生 SDK 测试总数从 15 增至 19；Git 安装测试也要求安装产物通过全部 19 项。
+
+验收已通过：`npm run test:native-subagent` 19/19；真实 `npm run test:git-install` 1/1，安装产物的同一套 SDK 回归 19/19。两轮均实际完成普通 scout 的 25 次、快速 scout 的 12 次 MCP 调用；内层限时触发后真实子孙进程退出，失败结果可读取。完整输出保存在外层后台任务 `b571b29a9` 的日志中。
+
+本次仅修改开发仓库并重建 `dist/` 和 `runtime/`，未改个人 `agent/extensions/subagent/`、安装目录、settings 或现有 GitHub tag。当前个人安装仍是原先 `git:github.com/yangcheng19960813/pi-background-tasks@v2.7.1`；开发源码的这项变更需要另行发布、升级安装并 reload 后才能用于当前会话，不能仅凭源码已改就宣称线上生效。
+
+## v2.7.2 发布内容：普通 / 快速 scout 统一 50 次上限
+
+用户随后确认恢复工具次数限制，但将普通与快速任务统一为 `SCOUT_MAX_TOOL_CALLS = 50`，不再保留快速 10 次或普通 20 次配额。计数沿用原执行器的模型 `toolCall` 规则，每个 scout 子任务独立累计；超过 50 次时终止该工作流并持久化配额失败。快速 3 分钟、普通 8 分钟限时及其环境覆盖、取消和清理机制不变。
+
+`tests/sdk/subagent-native-sdk.test.mjs` 的两项次数回归改为：普通与快速 scout 各自完整执行 50 次真实 MCP 调用，然后另启任务尝试 51 次，核对配额失败原因、transcript 中的 51 次调用尝试、失败结果落盘以及子进程退出。原生 SDK 测试总数仍为 19；Git 安装测试同步验证安装产物。
+
+验收通过：`npm run test:native-subagent` 19/19；真实 `npm run test:git-install` 1/1，其安装产物的同一套 SDK 回归 19/19。普通与快速任务均验证 50 次真实 MCP 调用成功、第 51 次触发 `Scout exceeded 50 tool calls`，失败结果落盘且子进程退出；限时与取消回归继续通过。完整输出在外层后台任务 `b405ed429` 的日志中。
+
+个人 `agent/agents/scout.md` 仅将快速 10 次 / 普通 20 次的两处提示改为 50 次，保留修正后的 CodeGraph 工具名、模型和原工具权限。修改前备份在外层 `.pi/tasks/scout-50-budget-fix/scout-before-aabbadf1-f9f7-4423-ac81-842e96fbf9da.md`。
+
+范围仅为本开发包的后台原生执行器与角色提示：没有修改个人原有阻塞式 `agent/extensions/subagent/index.ts`，也没有更新当前安装的 Git 包、settings 或 GitHub tag。当前会话的旧包不能仅通过 reload 获得这些开发改动，仍需另行发布与升级安装。

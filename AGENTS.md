@@ -1,6 +1,6 @@
 # AGENTS.md — pi-background-tasks 个人 fork 开发指南
 
-个人定制 fork：https://github.com/yangcheng19960813/pi-background-tasks.git ，分支 `feature/native-subagent`，基于上游 `ismailsaleekh/pi-background-tasks@2.6.9`。当前版本 2.7.1。详细历史与验收记录见 `LOCAL-DEVELOPMENT.md`。
+个人定制 fork：https://github.com/yangcheng19960813/pi-background-tasks.git ，分支 `feature/native-subagent`，基于上游 `ismailsaleekh/pi-background-tasks@2.6.9`。当前版本 2.7.2。详细历史与验收记录见 `LOCAL-DEVELOPMENT.md`。
 
 ## 定位
 
@@ -22,18 +22,32 @@ Pi 扩展包（不是独立应用）。核心定制：新增 `bg_subagent` / `bg
 | 目录 | 生成命令 | 内容 | 入库 |
 |---|---|---|---|
 | `dist/` | `npm run build:runtime` | 带 source map 的开发构建 | 是（上游惯例） |
-| `runtime/` | `npm run build:package` | 无 map 发布产物（71 文件） | 是（Pi git 安装必需） |
+| `runtime/` | `npm run build:package` | 无 map 发布运行闭包 | 是（Pi git 安装必需） |
 
 `prepare`（`scripts/prepare-package.mjs`）幂等：包内装了 TypeScript 就重建 runtime，没有就校验已提交的 runtime 可用。原因：Pi 安装 git 包用 `npm install --omit=dev`，无 devDependencies、无法编译。**改了 src 必须重建并提交 runtime/**，否则发布出去的是旧产物。
 
 ## 测试
 
 ```sh
-npm run test:native-subagent        # 11 项真实 Pi SDK 回归（真实子进程，~45s）
-npm run test:git-install            # npm Git 安装端到端 + 安装包加载后 11 项 SDK（~70s）
+npm run test:native-subagent        # 19 项真实 Pi SDK 回归（含 MCP/扩展调用，真实子进程）
+npm run test:git-install            # npm Git 安装端到端 + 安装包加载后的完整原生 SDK 回归
 npm run test:extension-deployment   # 7 项 deploy-extension 脚本检查
 npm run test:unit                   # registry 58 项（tsx）
 ```
+
+### 子代理的 MCP / 扩展工具
+
+- 角色 `tools` 由原执行器传给子 Pi 的 `--tools`；子进程自行加载个人配置中的扩展与 MCP，不会把父会话的临时工具注册自动复制过去。
+- 普通扩展工具要列入角色 `tools`。直接调用 MCP 要列工具名或 `mcp__<server>__*`；延迟发现要列 `tool_search`，默认 codemode 路径要列 `codemode`。
+- Pi 1.0.4 的 `--tools read` 不能理解为“清除了所有 MCP 注册”。MCP 的直接声明、间接可调用性和 `mcp__` 过滤规则不同；不要用 read-only 角色描述代替实际权限限制。
+- `tests/sdk/subagent-native-sdk.test.mjs` 的四项“工具冒烟”检查真实子 Pi 的 direct MCP + 普通扩展、deferred MCP 搜索后调用、codemode 嵌套 MCP，以及未选中的扩展 / 被 MCP 白名单过滤工具拒绝执行。
+- 冒烟只脚本化模型的工具选择，MCP stdio 服务、协议连接、工具执行、扩展 tool_call/tool_result 事件与 transcript 均真实运行。它证明调用链可用，不证明外部模型会自主选择工具，也不代表个人 CodeGraph 等服务已逐一验收。
+
+### 执行预算
+
+- 包内 `bg_subagent` 的 scout 使用统一 `SCOUT_MAX_TOOL_CALLS = 50`：普通和快速任务均最多 50 次模型工具调用；超过上限终止工作流。不恢复旧的普通 20 次 / 快速 10 次配额。
+- scout 仍按每个子进程限时：快速任务默认 3 分钟，普通任务默认 8 分钟；`PI_SUBAGENT_SCOUT_TIMEOUT_MS` 的 50 ms–30 分钟覆盖范围不变。
+- 外层 registry 超时、主动取消、子孙进程清理、reload/shutdown 与结果持久化保持原逻辑。其他角色限时及 bg_delegate/Fusion 的独立预算不在这次修改范围。
 
 已知失败，不要试图"修好"：
 - `npm run typecheck`：68 条上游测试接口诊断（旧 Context/ExtensionContext 迁移），生产源码 0 诊断。
