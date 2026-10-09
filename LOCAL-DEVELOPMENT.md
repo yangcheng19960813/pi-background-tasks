@@ -109,9 +109,9 @@ npm pack
 - 从实际安装后的包通过 Pi manifest 加载，完整 11 项原生 SDK 回归通过，包含真实子 Pi、角色配置、取消/超时、压缩、重载及会话隔离。
 - 该测试验证本地 Git transport 和 npm 的构建/打包机制，未伪称 GitHub 远程认证、分支推送或在线安装已验收。
 
-## 当前激活方式：git 包（v2.7.1）
+## 当前安装方式：git 包（v2.7.2）
 
-`agent/settings.json` 的 packages 现为 `git:github.com/yangcheng19960813/pi-background-tasks@v2.7.1`，来自 GitHub Release v2.7.1。扩展目录部署已移出自动加载（备份：外层 `.pi/tasks/extension-deployment/extensions-snapshot-2.7.0/`），两者不同时加载。
+`agent/settings.json` 的 packages 现为 `git:github.com/yangcheng19960813/pi-background-tasks@v2.7.2`，来自 GitHub Release v2.7.2。扩展目录部署已移出自动加载（备份：外层 `.pi/tasks/extension-deployment/extensions-snapshot-2.7.0/`），两者不同时加载。
 
 发布流程：提交后 `git tag v<version>` 并推送，Actions 自动构建并创建 Release、附带 npm tgz（无 map、71 文件）。Pi 的 git 包安装使用 `npm install --omit=dev`，无 devDependencies，因此 `runtime/` 产物随仓库提交；`prepare` 幂等——包内有 TypeScript 就重建，否则校验入库产物。日常升级：改版本 → `npm run build:package` → 提交（含 runtime/）→ 打 tag 推送 → `pi install git:github.com/yangcheng19960813/pi-background-tasks@v<version>`。
 
@@ -202,4 +202,17 @@ PI_NATIVE_DEPLOYMENT_DIR=<临时目录>/agent/extensions/pi-background-tasks nod
 
 个人 `agent/agents/scout.md` 仅将快速 10 次 / 普通 20 次的两处提示改为 50 次，保留修正后的 CodeGraph 工具名、模型和原工具权限。修改前备份在外层 `.pi/tasks/scout-50-budget-fix/scout-before-aabbadf1-f9f7-4423-ac81-842e96fbf9da.md`。
 
-范围仅为本开发包的后台原生执行器与角色提示：没有修改个人原有阻塞式 `agent/extensions/subagent/index.ts`，也没有更新当前安装的 Git 包、settings 或 GitHub tag。当前会话的旧包不能仅通过 reload 获得这些开发改动，仍需另行发布与升级安装。
+以上记录的是发布前的开发范围：仅修改本开发包的后台原生执行器与角色提示，未修改个人原有阻塞式 `agent/extensions/subagent/index.ts`。随后用户要求发布并升级当前安装，结果见下一节。
+
+## v2.7.2 发布与当前安装升级验收
+
+- 发布提交：`ccb7155`（`fix(subagent): 统一 50 次调用配额并发布 2.7.2`），已推送 `feature/native-subagent` 与新 tag `v2.7.2`，没有修改既有 tag。
+- GitHub Actions [release #37890066666](https://github.com/yangcheng19960813/pi-background-tasks/actions/runs/37890066666) 成功；[Release v2.7.2](https://github.com/yangcheng19960813/pi-background-tasks/releases/tag/v2.7.2) 的 `pi-background-tasks-2.7.2.tgz` 已上传，313,826 字节。
+- 实际下载上传资产后核对：71 个包文件、65 个 runtime 文件，无 `.map` 或 `sourceMappingURL`，全部 runtime 内容与已验收的本地构建一致（忽略平台行尾差异）。GitHub 资产 SHA-256：`86046139173f4243d4d531c89c12f0be3734cd9959063e51376c847e6e007aa0`。
+- 发布前重新运行：开发原生 SDK 19/19；真实 npm Git 安装 1/1，其安装产物 SDK 19/19；实际 `npm pack` 和载荷检查通过。日志为外层后台任务 `b8da9c7d9`。
+- 官方 Pi CLI `install git:github.com/yangcheng19960813/pi-background-tasks@v2.7.2` 已完成，原有唯一 Git 包声明由 v2.7.1 替换为 v2.7.2，没有追加第二份加载来源。无本地 TypeScript 时正确使用已提交 runtime。
+- 当前安装 checkout 为 `ccb71557227638d32c3b65651371e7911856c0b6`；独立 SDK 资源加载检查 errors=0，仅两个 manifest 入口，`bg_subagent` / `bg_subagent_result` / `subagent` / `subagent_inspect` / `bg_run` / `fusion_reason` 各注册一次，无开发目录或旧目录部署重复加载，无物理宿主 SDK 副本。settings 仅改变该 Git 包的版本来源。
+- 对当前个人 Git 安装目录再次运行原生 SDK 回归，19/19 全部通过，含普通 / 快速 scout 的 50 次真实 MCP 调用成功、第 51 次配额失败，以及限时、取消、压缩、reload/shutdown 和进程清理。日志为外层后台任务 `bac788367`。
+- 升级前完整旧包与 settings 备份：外层 `.pi/tasks/release-v2.7.2/install-before-c90ea130-0b33-49ce-a9b9-5fd67709bfb4/`。发布、上传包及安装元数据在外层 `.pi/tasks/release-v2.7.2/{publication,asset-check,installation,upgrade-backup}.json`。
+
+上述验证属于磁盘安装与独立 SDK 加载，不证明已经运行的主会话重载；当前主会话仍需执行 `/reload` 才能切换到新版。个人原有阻塞式 subagent 的执行器不属于本包，此次没有改动。
