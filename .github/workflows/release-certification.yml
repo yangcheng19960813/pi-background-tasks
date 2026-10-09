@@ -1,9 +1,6 @@
 name: Release certification
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
